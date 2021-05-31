@@ -1,4 +1,5 @@
 # import library
+from email import message
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
@@ -8,6 +9,9 @@ import imutils
 import time
 import cv2
 import os
+import smtplib
+from pygame import mixer
+from tkinter import messagebox
 
 #defined function
 def detect_and_predict_mask(frame, faceNet, maskNet):
@@ -79,10 +83,15 @@ faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
 
 # load the face mask detector model from disk
 maskNet = load_model("mask_detector.model")
-
 # initialize the video stream
 print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
+#load sound use for No wearing mask
+mixer.init()
+sound = mixer.Sound('FaceMask_detection_alarm.wav')
+#create subject and text for sending e-mail
+SUBJECT = "Security Alert"
+TEXT = "Found One Visitor that doesn't wear a mask at 44 garden place around the entrance of the resident."
 
 # loop over the frames from the video stream
 while True:
@@ -106,16 +115,28 @@ while True:
 		# the bounding box and text
 		label = "Mask" if mask > withoutMask else "No Mask"
 		color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
-
+		if(label == "Mask"):
+    			print("Beep")
+		elif(label == "No Mask"):
+				sound.play(time.daylight)
+				messagebox.showwarning("Warning", "Please wear a Face Mak")
+				message = 'Subject: {}\n\n{}'.format(SUBJECT, TEXT)
+				mail = smtplib.SMTP('smtp.gmail.com', 587)
+				mail.ehlo()
+				mail.starttls()
+				mail.login('lookpadppcy@gmail.com', 'lookpadppcy290243')
+				mail.sendmail('lookpadppcy@gmail.com', 'lookpadppcy@gmail.com', message)
+				mail.close
 		# include the probability in the label
 		label = "{} {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
 		# display the label and bounding box rectangle on the output
-		# frame
+		# frames
 		cv2.putText(frame, label, (startX, startY - 10),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,2)
 		cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
 
+		
 	# show the output frame
 	cv2.imshow("Face mask detector - Papichaya-Dev", frame)
 	key = cv2.waitKey(1) & 0xFF
