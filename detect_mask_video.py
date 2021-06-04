@@ -12,8 +12,17 @@ import os
 import smtplib
 from pygame import mixer
 from tkinter import messagebox
+import threading
+import asyncio
 
-#defined function
+#login gmail for sending if people doesn't wear a mask
+mail = smtplib.SMTP('smtp.gmail.com', 587)
+mail.ehlo()
+mail.starttls()
+# ('you email', 'your password')
+mail.login('xxx@gmail.com', 'xxxpassword')
+		
+#defined function for detect and predict mask
 def detect_and_predict_mask(frame, faceNet, maskNet):
     # grab the dimensions of the frame and then construct a blob
 	# from it
@@ -24,10 +33,9 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 	# pass the blob through the network and obtain the face detections
 	faceNet.setInput(blob)
 	detections = faceNet.forward()
-	print(detections.shape)
+	# print(detections.shape)
 
-	# initialize our list of faces, their corresponding locations,
-	# and the list of predictions from our face mask network
+	#สร้าง ตัวแปร faces,locs,preds เป็น Array เพื่อรอรับค่า
 	faces = []
 	locs = []
 	preds = []
@@ -51,8 +59,9 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 			(startX, startY) = (max(0, startX), max(0, startY))
 			(endX, endY) = (min(w - 1, endX), min(h - 1, endY))
 
-			# extract the face ROI, convert it from BGR to RGB channel
-			# ordering, resize it to 224x224, and preprocess it
+			# แยก Region of interest (ROI) ของเเต่ละใบหน้า, แปลงจาก BGR => RGB
+			# resize เป็น 224*224 และทำการ preprocessing
+			#คนมีกี่หน้า
 			face = frame[startY:endY, startX:endX]
 			face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
 			face = cv2.resize(face, (224, 224))
@@ -61,14 +70,14 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 
 			# add the face and bounding boxes to their respective
 			# lists
+			#เอาไปใส่หลายหน้า
 			faces.append(face)
+			#location ในการวาดรอบตำแหน่งหน้า, loc คือพิกัดที่จะเอาไปวาดหน้า
 			locs.append((startX, startY, endX, endY))
 
-	# only make a predictions if at least one face was detected
+	# จะ predict ก็ต่อเมื่อตรวจพบใบหน้ามากกว่า 1 หน้าขึ้นไป
 	if len(faces) > 0:
-		# for faster inference we'll make batch predictions on *all*
-		# faces at the same time rather than one-by-one predictions
-		# in the above `for` loop
+		#มาแปลง face เป็น numpy เพราะไวกว่าตัวอื่น 50x faster
 		faces = np.array(faces, dtype="float32")
 		preds = maskNet.predict(faces, batch_size=32)
 
@@ -76,62 +85,88 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 	# locations
 	return (locs, preds)
 
-# load our serialized face detector model from disk
-prototxtPath = r"face_detector\deploy.prototxt"
-weightsPath = r"face_detector\res10_300x300_ssd_iter_140000.caffemodel"
+#import framework และ model ที่ใช้ในการ detect face
+prototxtPath = r"face_detector\deploy.prototxt" #framework ไปอ่าน model  #detect หน้า ต้อง หน้าก่อน เเมส
+weightsPath = r"face_detector\res10_300x300_ssd_iter_140000.caffemodel" #model
 faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
 
-# load the face mask detector model from disk
+# load the face mask detector model จากโมเดลที่เราเทรนเสร็จ
 maskNet = load_model("mask_detector.model")
 # initialize the video stream
 print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
 #load sound use for No wearing mask
 mixer.init()
-sound = mixer.Sound('FaceMask_detection_alarm.wav')
+sound = mixer.Sound('Alert_Beep.wav')
 #create subject and text for sending e-mail
 SUBJECT = "Security Alert"
 TEXT = "Found One Visitor that doesn't wear a mask at 44 garden place around the entrance of the resident."
+#set variable use for People who don't wear a mask
+already_loaded = False
+already_sent = False
+sound_cooldown = False
+email_cooldown = False
+
+def releaseCooldown():
+	global sound_cooldown
+	sound_cooldown = False
+
+def playSound():
+	global sound_cooldown
+	if sound_cooldown:return 
+	sound.play(time.daylight)
+	sound_cooldown = True
+	threading.Timer(2, releaseCooldown).start()
+
+def setAlreadyLoaded():
+	global already_loaded
+	if already_loaded == False:
+		already_loaded = True
+
+def sendWarningEmail():
+	global already_sent
+	if already_sent:return 
+	message = 'Subject: {}\n\n{}'.format(SUBJECT, TEXT)
+	mail.sendmail('xxx@gmail.com', 'xxxpassword', message)
+	mail.close()
+	already_sent = True
 
 # loop over the frames from the video stream
 while True:
-	# grab the frame from the threaded video stream and resize it
-	# to have a maximum width of 400 pixels
+	#อ่านตัว frame / ปรับขนาด framr = 600 px
 	frame = vs.read()
 	frame = imutils.resize(frame, width=600)
 
-	# detect faces in the frame and determine if they are wearing a
-	# face mask or not
+	# detect ใบหน้าในเฟรมและ detect ดูว่ามีคนใส่เเมสหรือไม่ใส่
+	# detect ก่อนถึงได้ locs , preds
 	(locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
 
-	# loop over the detected face locations and their corresponding
-	# locations
+	# เข้า loop ตามตำแหน่งใบหน้าที่ detect
+	# locs = ทำกรอบ , preds
 	for (box, pred) in zip(locs, preds):
 		# unpack the bounding box and predictions
 		(startX, startY, endX, endY) = box
 		(mask, withoutMask) = pred
 
-		# determine the class label and color we'll use to draw
-		# the bounding box and text
+		#กำหนด label เเละให้ค่า label = Mask , No mask กำหนดสีให้ text 
 		label = "Mask" if mask > withoutMask else "No Mask"
 		color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
-		if(label == "Mask"):
-    			print("Beep")
-		elif(label == "No Mask"):
-				sound.play(time.daylight)
-				messagebox.showwarning("Warning", "Please wear a Face Mak")
-				message = 'Subject: {}\n\n{}'.format(SUBJECT, TEXT)
-				mail = smtplib.SMTP('smtp.gmail.com', 587)
-				mail.ehlo()
-				mail.starttls()
-				mail.login('lookpadppcy@gmail.com', 'lookpadppcy290243')
-				mail.sendmail('lookpadppcy@gmail.com', 'lookpadppcy@gmail.com', message)
-				mail.close
-		# include the probability in the label
+		#กำหนดเงื่อนไขถ้าไม่ใส่เเมสให้ put txt และ play sound ให้ threading timer 1 วิเเละค่อยส่ง E-mail
+		if(label == "No Mask"):
+			if(already_loaded == False):
+				continue
+			cv2.putText(frame, "Please wear a Mask !", ( 160, 30),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.8, color,2)
+			playSound()
+			if not email_cooldown:
+				email_cooldown = True
+				threading.Timer(1, sendWarningEmail).start()
+
+
+		# ระบุค่า accuracy ใน label
 		label = "{} {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-		# display the label and bounding box rectangle on the output
-		# frames
+		#แสดงผล label และ ตีกรอบสี่เหลี่ยมบริเวณ output 
 		cv2.putText(frame, label, (startX, startY - 10),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,2)
 		cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
@@ -139,9 +174,10 @@ while True:
 		
 	# show the output frame
 	cv2.imshow("Face mask detector - Papichaya-Dev", frame)
+	threading.Timer(2, setAlreadyLoaded).start()
 	key = cv2.waitKey(1) & 0xFF
 
-	# if the `q` key was pressed, break from the loop
+	# ถ้ากด q จะเป็นการ break loop
 	if key == ord("q"):
 		break
 
