@@ -1,4 +1,8 @@
 # import library
+import tkinter as tk
+from tkinter.ttk import *
+from tkinter import *  
+from PIL import ImageTk, Image
 from email import message
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -130,59 +134,101 @@ def sendWarningEmail():
 	mail.close()
 	already_sent = True
 
-# loop over the frames from the video stream
-while True:
-	#อ่านตัว frame / ปรับขนาด framr = 600 px
-	frame = vs.read()
-	frame = imutils.resize(frame, width=800)
+def detection_function():
+    # loop over the frames from the video stream
+    global email_cooldown
+    while True:
+        #อ่านตัว frame / ปรับขนาด framr = 600 px
+        frame = vs.read()
+        frame = imutils.resize(frame, width=800)
 
-	# detect ใบหน้าในเฟรมและ detect ดูว่ามีคนใส่เเมสหรือไม่ใส่
-	# detect ก่อนถึงได้ locs , preds
-	(locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
+        # detect ใบหน้าในเฟรมและ detect ดูว่ามีคนใส่เเมสหรือไม่ใส่
+        # detect ก่อนถึงได้ locs , preds
+        (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
 
-	# เข้า loop ตามตำแหน่งใบหน้าที่ detect
-	# locs = ทำกรอบ , preds
-	for (box, pred) in zip(locs, preds):
-		# unpack the bounding box and predictions
-		(startX, startY, endX, endY) = box
-		(mask, withoutMask) = pred
+        # เข้า loop ตามตำแหน่งใบหน้าที่ detect
+        # locs = ทำกรอบ , preds
+        for (box, pred) in zip(locs, preds):
+            # unpack the bounding box and predictions
+            (startX, startY, endX, endY) = box
+            (mask, withoutMask) = pred
 
-		#กำหนด label เเละให้ค่า label = Mask , No mask กำหนดสีให้ text 
-		label = "Mask" if mask > withoutMask else "No Mask"
-		color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
-		#กำหนดเงื่อนไขถ้าไม่ใส่เเมสให้ put txt และ play sound ให้ threading timer 1 วิเเละค่อยส่ง E-mail
-		if(label == "Mask"):
-			cv2.putText(frame, "Can go inside", ( 250, 60),
-			cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
-		if(label == "No Mask"):
-			if(already_loaded == False):
-				continue
-			cv2.putText(frame, "Please wear a Mask !", ( 200, 60),
-			cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
-			playSound()
-			if not email_cooldown:
-				email_cooldown = True
-				threading.Timer(1, sendWarningEmail).start()
+            #กำหนด label เเละให้ค่า label = Mask , No mask กำหนดสีให้ text 
+            label = "Mask" if mask > withoutMask else "No Mask"
+            color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
+            #กำหนดเงื่อนไขถ้าไม่ใส่เเมสให้ put txt และ play sound ให้ threading timer 1 วิเเละค่อยส่ง E-mail
+            if(label == "Mask"):
+                cv2.putText(frame, "You are arounded to go inside", ( 120, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
+            if(label == "No Mask"):
+                if(already_loaded == False):
+                    continue
+                cv2.putText(frame, "Please wear a Mask !", ( 200, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
+                playSound()
+                #กันไม่ให้ thread สร้างซ้ำๆ
+                if not email_cooldown:
+                    email_cooldown = True
+                    threading.Timer(1, sendWarningEmail).start()
 
+            # ระบุค่า accuracy ใน label
+            label = "{} {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-		# ระบุค่า accuracy ใน label
-		label = "{} {:.2f}%".format(label, max(mask, withoutMask) * 100)
+            #แสดงผล label และ ตีกรอบสี่เหลี่ยมบริเวณ output 
+            cv2.putText(frame, label, (startX, startY - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,2)
+            cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
 
-		#แสดงผล label และ ตีกรอบสี่เหลี่ยมบริเวณ output 
-		cv2.putText(frame, label, (startX, startY - 10),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,2)
-		cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
+            
+        # show the output frame
+        cv2.imshow("Face mask detector - Papichaya-Dev", frame)
+        threading.Timer(2, setAlreadyLoaded).start()
+        key = cv2.waitKey(1) & 0xFF
 
-		
-	# show the output frame
-	cv2.imshow("Face mask detector - Papichaya-Dev", frame)
-	threading.Timer(2, setAlreadyLoaded).start()
-	key = cv2.waitKey(1) & 0xFF
+        # ถ้ากด q จะเป็นการ break loop
+        if key == ord("q"):
+            break
 
-	# ถ้ากด q จะเป็นการ break loop
-	if key == ord("q"):
-		break
+    # do a bit of cleanup
+    cv2.destroyAllWindows()
+    vs.stop()
+class Application(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.pack()
+        self.create_widgets()
 
-# do a bit of cleanup
-cv2.destroyAllWindows()
-vs.stop()
+    def create_widgets(self):
+        #add label for number
+        self.label1 = Label(self)
+        self.label1["text"] = "Face Mask Detector \nAlert System" 
+        self.label1.config(font=('Helvetica 18 bold'))
+        self.label1.pack(side="top", padx=1)
+        #add 
+        self.open_button = tk.Button(self,padx=7)
+        self.open_button["text"] = "Open camera"
+        self.open_button["command"] = self.detection
+        self.open_button.pack(side=tk.LEFT, padx=10)
+        self.grid(padx=120, pady=10, row=30)
+
+        #Create an object of tkinter ImageTk
+        self.img=PhotoImage(file="face.png")
+        self.pic=Label(image=self.img, text="Hello")
+        self.pic.config(font=('Helvetica 18 bold'))
+        self.pic.image=self.img
+        self.pic.grid()
+
+        self.quit = tk.Button(self, text="QUIT", fg="red",
+                              command=root.destroy, padx=30, )
+        self.quit.pack(side=tk.LEFT)
+
+    def detection(self):
+        detection_function()
+
+#for debug
+if __name__=="__main__":
+  root = tk.Tk()
+  root.title("Face Mask Detector - Papichaya-Dev")
+  root.geometry("500x500")
+  app = Application(master=root)
+  app.mainloop()
