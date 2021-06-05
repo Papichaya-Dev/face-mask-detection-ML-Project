@@ -14,13 +14,14 @@ from pygame import mixer
 from tkinter import messagebox
 import threading
 import asyncio
+from config import SMTP_EMAIL, SMTP_PASSWORD
 
 #login gmail for sending if people doesn't wear a mask
 mail = smtplib.SMTP('smtp.gmail.com', 587)
 mail.ehlo()
 mail.starttls()
 # ('you email', 'your password')
-mail.login('xxx@gmail.com', 'xxxpassword')
+mail.login(SMTP_EMAIL,SMTP_PASSWORD)
 		
 #defined function for detect and predict mask
 def detect_and_predict_mask(frame, faceNet, maskNet):
@@ -127,7 +128,7 @@ def sendWarningEmail():
 	global already_sent
 	if already_sent:return 
 	message = 'Subject: {}\n\n{}'.format(SUBJECT, TEXT)
-	mail.sendmail('xxx@gmail.com', 'xxxpassword', message)
+	mail.sendmail(SMTP_EMAIL,SMTP_EMAIL, message)
 	mail.close()
 	already_sent = True
 
