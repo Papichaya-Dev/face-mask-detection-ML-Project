@@ -55,14 +55,12 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
 			(startX, startY, endX, endY) = box.astype("int")
 
-			# ensure the bounding boxes fall within the dimensions of
-			# the frame
+			#ตีกรอบตามแกน x , แกน y
 			(startX, startY) = (max(0, startX), max(0, startY))
 			(endX, endY) = (min(w - 1, endX), min(h - 1, endY))
 
 			# แยก Region of interest (ROI) ของเเต่ละใบหน้า, แปลงจาก BGR => RGB
 			# resize เป็น 224*224 และทำการ preprocessing
-			#คนมีกี่หน้า
 			face = frame[startY:endY, startX:endX]
 			face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
 			face = cv2.resize(face, (224, 224))
@@ -136,7 +134,7 @@ def sendWarningEmail():
 while True:
 	#อ่านตัว frame / ปรับขนาด framr = 600 px
 	frame = vs.read()
-	frame = imutils.resize(frame, width=600)
+	frame = imutils.resize(frame, width=800)
 
 	# detect ใบหน้าในเฟรมและ detect ดูว่ามีคนใส่เเมสหรือไม่ใส่
 	# detect ก่อนถึงได้ locs , preds
@@ -153,11 +151,14 @@ while True:
 		label = "Mask" if mask > withoutMask else "No Mask"
 		color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
 		#กำหนดเงื่อนไขถ้าไม่ใส่เเมสให้ put txt และ play sound ให้ threading timer 1 วิเเละค่อยส่ง E-mail
+		if(label == "Mask"):
+			cv2.putText(frame, "Can go inside", ( 250, 60),
+			cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
 		if(label == "No Mask"):
 			if(already_loaded == False):
 				continue
-			cv2.putText(frame, "Please wear a Mask !", ( 160, 30),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.8, color,2)
+			cv2.putText(frame, "Please wear a Mask !", ( 200, 60),
+			cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
 			playSound()
 			if not email_cooldown:
 				email_cooldown = True
