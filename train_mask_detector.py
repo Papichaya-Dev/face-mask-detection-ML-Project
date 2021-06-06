@@ -57,7 +57,7 @@ labels = np.array(labels)
 (train_X, test_X, train_Y, test_Y) = train_test_split(data, labels,
 	test_size=0.20, stratify=labels, random_state=42)
 
-# construct the training image generator for data augmentation
+# construct the training แfor data augmentation
 augmentation = ImageDataGenerator(
 	rotation_range=20,
 	zoom_range=0.15,

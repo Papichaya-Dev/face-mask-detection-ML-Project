@@ -157,9 +157,9 @@ def detection_function():
             label = "Mask" if mask > withoutMask else "No Mask"
             color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
             #กำหนดเงื่อนไขถ้าไม่ใส่เเมสให้ put txt และ play sound ให้ threading timer 1 วิเเละค่อยส่ง E-mail
-            if(label == "Mask"):
-                cv2.putText(frame, "You are arounded to go inside", ( 120, 60),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
+            # if(label == "Mask"):
+            #     cv2.putText(frame, "You are arounded to go inside", ( 120, 60),
+            #     cv2.FONT_HERSHEY_SIMPLEX, 1.2, color,2)
             if(label == "No Mask"):
                 if(already_loaded == False):
                     continue
@@ -200,10 +200,10 @@ class Application(tk.Frame):
 
     def create_widgets(self):
         #add label for number
-        self.label1 = Label(self)
-        self.label1["text"] = "Face Mask Detector \nAlert System" 
-        self.label1.config(font=('Helvetica 18 bold'))
-        self.label1.pack(side="top", padx=1)
+        self.label_info = Label(self)
+        self.label_info["text"] = "Face Mask Detector \nAlert System" 
+        self.label_info.config(font=('Helvetica 18 bold'))
+        self.label_info.pack(side="top", padx=1)
         #add 
         self.open_button = tk.Button(self,padx=7)
         self.open_button["text"] = "Open camera"
@@ -212,8 +212,8 @@ class Application(tk.Frame):
         self.grid(padx=120, pady=10, row=30)
 
         #Create an object of tkinter ImageTk
-        self.img=PhotoImage(file="face.png")
-        self.pic=Label(image=self.img, text="Hello")
+        self.img=PhotoImage(file="face_GUI.png")
+        self.pic=Label(image=self.img)
         self.pic.config(font=('Helvetica 18 bold'))
         self.pic.image=self.img
         self.pic.grid()
